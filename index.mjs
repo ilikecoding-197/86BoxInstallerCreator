@@ -10,11 +10,8 @@ import ora from 'ora';
 import unzipper from 'unzipper';
 import path from 'path';
 import extraFs from 'fs-extra';
-import { exec } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import http from 'http';
-import { promisify } from 'util';
-
-const execPromise = promisify(exec);
 
 async function ask(question) {
     const rl = readline.createInterface({
@@ -155,6 +152,7 @@ function downloadWithProgress(url, outputPath, downloadText = "Downloading", max
                     width: 40,
                     complete: '=',
                     incomplete: ' ',
+                    clear: true,
                     total,
                 });
             } else {
@@ -311,7 +309,6 @@ const args = getArgs();
     await download(emuUrl, "emu.zip", "86Box");
     await download(romsUrl, "roms.zip", "86Box ROMs");
     await download(managerUrl, "manager.zip", "86Box Manager");
-    console.log();
 
     async function extract(file, dir, name) {
         const directory = await unzipper.Open.file(file);
@@ -320,6 +317,7 @@ const args = getArgs();
             width: 40,
             complete: '=',
             incomplete: ' ',
+            clear: true,
         });
 
         await Promise.all(directory.files.map(async (entry) => {
@@ -347,7 +345,6 @@ const args = getArgs();
     await extract("emu.zip", "emu", "86Box");
     await extract("roms.zip", "roms", "86Box ROMs");
     await extract("manager.zip", "manager", "86Box Manager");
-    console.log();
 
     const romDir = "roms/roms-" + romsTag.slice(1);
     const cleanupDeleteFiles = [
@@ -358,6 +355,7 @@ const args = getArgs();
         width: 40,
         complete: '=',
         incomplete: ' ',
+        clear: true,
         total: cleanupDeleteFiles.length
     });
 
@@ -370,6 +368,7 @@ const args = getArgs();
         width: 40,
         complete: '=',
         incomplete: ' ',
+        clear: true,
         total: 5
     });
     fs.mkdirSync("output"); outputBar.tick();
@@ -447,14 +446,25 @@ const args = getArgs();
     moveAllFiles("emu", "output");
     copyAllFiles("setupFiles", "output");
 
-    console.log(chalk.green("\nGenerating final setup..."));
+    console.log(chalk.green("Generating final setup..."));
 
     let installerVersion = versions.emu == "latest" ? emuRelease.tag_name : "v" + versions.emu;
     const installerFileName = "86Box-" + installerVersion
 
-    await execPromise("\"" + innoSetupExe + "\" /O. /F\"" + installerFileName + "\" /Qp \"output\\install.iss\" /DMyAppVersion=" + installerVersion.slice(1));
-    fs.rmSync("output", { recursive: true, force: true })
+    const inno = spawn('"' + innoSetupExe + '"', [
+        "/O.",
+        "/F\"" + installerFileName + "\"",
+        "/DMyAppVersion=" + installerVersion.slice(1),
+        "\"output\\install.iss\"",
+        "/Qp",
+    ], {
+        shell: true,
+        stdio: "inherit"
+    });
 
-    console.log(chalk.green("Done! You can find the output executable in the current directory, " + installerFileName + ".exe."));
-    process.exit(0);
+    inno.on('close', (code) => {
+        readline.moveCursor(process.stdout, 0, -1);
+        console.log(chalk.green("Done! You can find the output executable in the current directory, " + installerFileName + ".exe."));
+        process.exit(0);
+    });
 })();
