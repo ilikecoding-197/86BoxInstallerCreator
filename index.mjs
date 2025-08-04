@@ -81,6 +81,11 @@ function getArgs() {
             type: "boolean",
             description: "Instead of normal operation, delete files from a run. Will also delete files from the middle of a run (in case of a error)."
         })
+        .option("verbose", {
+            alias: "v",
+            type: "boolean",
+            description: "Verbose mode - currently only have the Inno Setup Compiler output more info."
+        })
         .argv;
 
     return argv;
@@ -451,13 +456,15 @@ const args = getArgs();
     let installerVersion = versions.emu == "latest" ? emuRelease.tag_name : "v" + versions.emu;
     const installerFileName = "86Box-" + installerVersion
 
-    const inno = spawn('"' + innoSetupExe + '"', [
+    let innoArgs = [
         "/O.",
         "/F\"" + installerFileName + "\"",
         "/DMyAppVersion=" + installerVersion.slice(1),
-        "\"output\\install.iss\"",
-        "/Qp",
-    ], {
+        "\"output\\install.iss\""
+    ]
+    if (!args.verbose) innoArgs.push("/Qp");
+
+    const inno = spawn('"' + innoSetupExe + '"', innoArgs, {
         shell: true,
         stdio: "inherit"
     });
